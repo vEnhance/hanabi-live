@@ -35,6 +35,7 @@ export const image = (getBareName: () => string) => {
       y: Math.floor(0.04 * CARD_W),
     },
     shadowOpacity: 0.4,
+    listening: true, // As the main card element, this must be listening in order for events to fire
   });
   (bare as Konva.Shape).sceneFunc((ctx: KonvaContext.Context) => {
     scaleCardImage(
