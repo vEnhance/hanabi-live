@@ -5,7 +5,7 @@ const defaultLayerSettings = {
   // https://konvajs.org/docs/performance/Listening_False.html
   // This means that we have to explicitly set "listening: true" for every element that
   // we want to bind events to (for clicking, dragging, hovering, etc.)
-  listening: false,
+  listening: true,
 };
 
 // We don't want to add too many layers; the Konva documentation states that 3-5 is max:

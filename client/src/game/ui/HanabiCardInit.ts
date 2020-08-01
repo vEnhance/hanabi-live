@@ -35,6 +35,7 @@ export const image = (getBareName: () => string) => {
       y: Math.floor(0.04 * CARD_W),
     },
     shadowOpacity: 0.4,
+    listening: false,
   };
   const bare = new Konva.Image(imageConfig);
   (bare as Konva.Shape).sceneFunc((ctx: KonvaContext.Context) => {
@@ -290,13 +291,13 @@ export const pips = (variant: Variant) => {
       fill: 'white',
       stroke: 'black',
       strokeWidth: 3,
-      listening: false,
       shadowEnabled: !globals.options.speedrun,
       shadowColor: 'black',
       shadowOffsetX: 5,
       shadowOffsetY: 5,
       shadowOpacity: 0.4,
       shadowForStrokeEnabled: true,
+      listening: false,
     });
     rankPips.add(rankPip);
     rankPipsMap.set(rank, rankPip);
