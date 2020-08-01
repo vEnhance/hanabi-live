@@ -59,7 +59,6 @@ export default class LayoutChild extends Konva.Group {
     }
 
     if (this.shouldBeDraggable(globals.state.visibleState.turn.currentPlayerIndex)) {
-      console.log('XXXXXXXX SETTING DRAGGABLE TO TRUE FOR:', this.card.state.order);
       this.draggable(true);
       this.on('dragstart', this.dragStart);
       this.on('dragend', this.dragEnd);
@@ -87,7 +86,6 @@ export default class LayoutChild extends Konva.Group {
         this.card.setVisualEffect('hand');
       });
     } else {
-      console.log('YYYYYYYYYYYYY SETTING DRAGGABLE TO FALSE FOR:', this.card.state.order);
       this.draggable(false);
       this.off('dragstart');
       this.off('dragend');

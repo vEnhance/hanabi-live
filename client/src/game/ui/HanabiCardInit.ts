@@ -24,7 +24,7 @@ export const image = (getBareName: () => string) => {
   // Create the "bare" card image, which is the main card graphic
   // If the card is not revealed, it will just be a gray rectangle
   // The pips and other elements of a card are drawn on top of the bare image
-  const imageConfig: Konva.ImageConfig = {
+  const bare = new Konva.Image({
     width: CARD_W,
     height: CARD_H,
     image: null as unknown as ImageBitmapSource,
@@ -35,9 +35,7 @@ export const image = (getBareName: () => string) => {
       y: Math.floor(0.04 * CARD_W),
     },
     shadowOpacity: 0.4,
-    listening: false,
-  };
-  const bare = new Konva.Image(imageConfig);
+  });
   (bare as Konva.Shape).sceneFunc((ctx: KonvaContext.Context) => {
     scaleCardImage(
       ctx._context,
