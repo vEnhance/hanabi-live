@@ -182,8 +182,8 @@ func main() {
 	// Start the Discord bot (in "discord.go")
 	discordInit()
 
-	// Initialize a WebSocket router using the Melody framework (in "websocket.go")
-	websocketInit()
+	// Initialize the WebSocket command map (in "command.go")
+	commandMapInit()
 
 	// Initialize chat commands (in "chatCommand.go")
 	chatCommandInit()

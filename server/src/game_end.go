@@ -47,8 +47,8 @@ func (g *Game) End() {
 	// after the game is converted)
 	for _, p := range t.Players {
 		if p.Session != nil {
-			p.Session.Set("status", StatusLobby)
-			p.Session.Set("tableID", uint64(0))
+			p.Session.Status = StatusLobby
+			p.Session.TableID = uint64(0)
 			notifyAllUser(p.Session)
 		}
 	}
@@ -355,7 +355,7 @@ func (t *Table) ConvertToSharedReplay() {
 		// Skip offline players and players in the lobby;
 		// if they re-login, then they will just stay in the lobby
 		if !p.Present {
-			if p.ID == t.Owner && (p.Session == nil || p.Session.IsClosed()) {
+			if p.ID == t.Owner && (p.Session == nil || p.Session.Closed) {
 				// We don't want to pass the replay leader away if they are still in the lobby
 				// (as opposed to being offline)
 				ownerOffline = true
@@ -429,8 +429,8 @@ func (t *Table) ConvertToSharedReplay() {
 	for _, sp := range t.Spectators {
 		// Reset everyone's status (both players and spectators are now spectators)
 		if sp.Session != nil {
-			sp.Session.Set("status", StatusSharedReplay)
-			sp.Session.Set("tableID", t.ID)
+			sp.Session.Status = StatusSharedReplay
+			sp.Session.TableID = t.ID
 			notifyAllUser(sp.Session)
 		}
 

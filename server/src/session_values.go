@@ -3,9 +3,7 @@
 
 package main
 
-import (
-	"time"
-)
+/*
 
 func (s *Session) SessionID() uint64 {
 	if s == nil {
@@ -202,3 +200,5 @@ func (s *Session) Banned() bool {
 		return v.(bool)
 	}
 }
+
+*/

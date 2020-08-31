@@ -1,21 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
-	"sync/atomic"
-	"time"
 
 	gsessions "github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v4"
 )
 
 var (
-	// The counter is atomically incremented before assignment,
-	// so the first ID will be 1 and will increase from there
-	sessionIDCounter uint64 = 0
+	upgrader = websocket.Upgrader{}
 )
 
 // httpWS handles part 2 of 2 for logic authentication
@@ -39,7 +37,7 @@ func httpWS(c *gin.Context) {
 	var ip string
 	if v, _, err := net.SplitHostPort(r.RemoteAddr); err != nil {
 		msg := "Failed to parse the IP address:"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else {
 		ip = v
@@ -50,18 +48,12 @@ func httpWS(c *gin.Context) {
 	// Check to see if their IP is banned
 	if banned, err := models.BannedIPs.Check(ip); err != nil {
 		msg := "Failed to check to see if the IP \"" + ip + "\" is banned:"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else if banned {
-		logger.Info("IP \"" + ip + "\" tried to establish a WebSocket connection, " +
-			"but they are banned.")
-		http.Error(
-			w,
-			"Your IP address has been banned. "+
-				"Please contact an administrator if you think this is a mistake.",
-			http.StatusUnauthorized,
-		)
-		deleteCookie(c)
+		msg := "IP \"" + ip + "\" tried to establish a WebSocket connection, but they are banned."
+		reason := "Your IP address has been banned. Please contact an administrator if you think this is a mistake."
+		httpWSDeny(c, msg, reason)
 		return
 	}
 
@@ -69,7 +61,7 @@ func httpWS(c *gin.Context) {
 	var muted bool
 	if v, err := models.MutedIPs.Check(ip); err != nil {
 		msg := "Failed to check to see if the IP \"" + ip + "\" is muted:"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else {
 		muted = v
@@ -81,7 +73,7 @@ func httpWS(c *gin.Context) {
 	if v := session.Get("userID"); v == nil {
 		msg := "Unauthorized WebSocket handshake detected from \"" + ip + "\". " +
 			"This likely means that their cookie has expired."
-		httpWSDeny(c, msg)
+		httpWSDeny(c, msg, "")
 		return
 	} else {
 		userID = v.(int)
@@ -97,11 +89,11 @@ func httpWS(c *gin.Context) {
 		msg := "User from \"" + ip + "\" " +
 			"tried to login with a cookie with an orphaned user ID of " + strconv.Itoa(userID) +
 			". Deleting their cookie."
-		httpWSDeny(c, msg)
+		httpWSDeny(c, msg, "")
 		return
 	} else if err != nil {
 		msg := "Failed to get the username for user " + strconv.Itoa(userID) + ":"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else {
 		username = v
@@ -111,7 +103,7 @@ func httpWS(c *gin.Context) {
 	var friendsMap map[int]struct{}
 	if v, err := models.UserFriends.GetMap(userID); err != nil {
 		msg := "Failed to get the friend map for user \"" + username + "\":"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else {
 		friendsMap = v
@@ -119,7 +111,7 @@ func httpWS(c *gin.Context) {
 	var reverseFriendsMap map[int]struct{}
 	if v, err := models.UserReverseFriends.GetMap(userID); err != nil {
 		msg := "Failed to get the reverse friend map for user \"" + username + "\":"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else {
 		reverseFriendsMap = v
@@ -129,7 +121,7 @@ func httpWS(c *gin.Context) {
 	var hyphenated bool
 	if v, err := models.UserSettings.IsHyphenated(userID); err != nil {
 		msg := "Failed to get the Hyphen-ated setting for user \"" + username + "\":"
-		httpWSError(c, msg, err)
+		httpWSInternalError(c, msg, err)
 		return
 	} else {
 		hyphenated = v
@@ -137,26 +129,10 @@ func httpWS(c *gin.Context) {
 
 	// If they got this far, they are a valid user
 	logger.Info("User \"" + username + "\" is establishing a WebSocket connection.")
-
-	// Transfer the values from the login cookie into WebSocket session variables
-	// New keys added here should also be added to the "newFakeSesssion()" function
-	keys := defaultSessionKeys()
-	// The session ID is independent of the user and is used for disconnection purposes
-	keys["sessionID"] = atomic.AddUint64(&sessionIDCounter, 1)
-	keys["userID"] = userID
-	keys["username"] = username
-	keys["muted"] = muted
-	keys["friends"] = friendsMap
-	keys["reverseFriends"] = reverseFriendsMap
-	keys["hyphenated"] = hyphenated
-
-	// Validation succeeded; establish the WebSocket connection
-	// "HandleRequestWithKeys()" will call the "websocketConnect()" function if successful;
-	// further initialization is performed there
-	if err := m.HandleRequestWithKeys(w, r, keys); err != nil {
-		// We use "logger.Info()" instead of "logger.Error()" because WebSocket establishment can
-		// fail for mundane reasons (e.g. internet dropping)
-		logger.Info("Failed to establish the WebSocket connection for user \""+username+"\":", err)
+	var conn *websocket.Conn
+	if v, err := upgrader.Upgrade(w, r, nil); err != nil {
+		// WebSocket establishment can fail for mundane reasons (e.g. internet dropping)
+		logger.Info("Failed to upgrade the HTTP connection for user \""+username+"\":", err)
 		http.Error(
 			w,
 			http.StatusText(http.StatusBadRequest),
@@ -164,10 +140,32 @@ func httpWS(c *gin.Context) {
 		)
 		deleteCookie(c)
 		return
+	} else {
+		conn = v
+	}
+	defer conn.Close()
+
+	// Initialize the object that represents their WebSocket session
+	s := NewSession()
+	s.Conn = conn
+	s.UserID = userID
+	s.Username = username
+	s.Muted = muted
+	s.Friends = friendsMap
+	s.ReverseFriends = reverseFriendsMap
+	s.Hyphenated = hyphenated
+
+	for {
+		// Read
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			logger.Error(err)
+		}
+		fmt.Printf("%s\n", msg)
 	}
 }
 
-func httpWSError(c *gin.Context, msg string, err error) {
+func httpWSInternalError(c *gin.Context, msg string, err error) {
 	// Local variables
 	w := c.Writer
 
@@ -180,36 +178,18 @@ func httpWSError(c *gin.Context, msg string, err error) {
 	deleteCookie(c)
 }
 
-func httpWSDeny(c *gin.Context, msg string) {
+func httpWSDeny(c *gin.Context, msg string, reason string) {
 	// Local variables
 	w := c.Writer
 
 	logger.Info(msg)
+	if reason == "" {
+		reason = http.StatusText(http.StatusUnauthorized)
+	}
 	http.Error(
 		w,
-		http.StatusText(http.StatusUnauthorized),
+		reason,
 		http.StatusUnauthorized,
 	)
 	deleteCookie(c)
-}
-
-func defaultSessionKeys() map[string]interface{} {
-	keys := make(map[string]interface{})
-
-	keys["sessionID"] = -1
-	keys["userID"] = -1
-	keys["username"] = ""
-	keys["muted"] = false
-	keys["status"] = StatusLobby // By default, new users are in the lobby
-	keys["tableID"] = uint64(0)
-	keys["friends"] = make(map[int]struct{})
-	keys["reverseFriends"] = make(map[int]struct{})
-	keys["hyphenated"] = false
-	keys["inactive"] = false
-	keys["fakeUser"] = false
-	keys["rateLimitAllowance"] = RateLimitRate
-	keys["rateLimitLastCheck"] = time.Now()
-	keys["banned"] = false
-
-	return keys
 }

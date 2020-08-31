@@ -194,8 +194,8 @@ func debugPrint() {
 	sessionsMutex.RLock()
 	for i, s2 := range sessions { // This is a map[int]*Session
 		logger.Debug("    User ID: " + strconv.Itoa(i) + ", " +
-			"Username: " + s2.Username() + ", " +
-			"Status: " + strconv.Itoa(s2.Status()))
+			"Username: " + s2.Username + ", " +
+			"Status: " + strconv.Itoa(s2.Status))
 	}
 	sessionsMutex.RUnlock()
 	logger.Debug("---------------------------------------------------------------")
@@ -223,7 +223,7 @@ func debugFunction() {
 			break
 		}
 		logger.Debug("ON GAME:", id)
-		s := newFakeSession(1, "Server")
+		s := NewFakeSession(1, "Server")
 		commandReplayCreate(s, &CommandData{ // Manual invocation
 			Source:     "id",
 			GameID:     id,

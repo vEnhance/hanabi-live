@@ -79,7 +79,7 @@ var (
 )
 
 // Define all of the WebSocket commands
-func commandInit() {
+func commandMapInit() {
 	// Table commands
 	commandMap["tableCreate"] = commandTableCreate
 	commandMap["tableJoin"] = commandTableJoin

@@ -29,7 +29,7 @@ func commandTableSpectate(s *Session, d *CommandData) {
 
 	// Validate that they are not already spectating this table
 	for _, sp := range t.Spectators {
-		if sp.ID == s.UserID() {
+		if sp.ID == s.UserID {
 			s.Warning("You are already spectating this table.")
 			return
 		}
@@ -40,7 +40,7 @@ func commandTableSpectate(s *Session, d *CommandData) {
 	tablesMutex.RLock()
 	for _, t2 := range tables {
 		for _, sp := range t2.Spectators {
-			if sp.ID == s.UserID() {
+			if sp.ID == s.UserID {
 				alreadySpectating = true
 				break
 			}
@@ -72,15 +72,15 @@ func tableSpectate(s *Session, d *CommandData, t *Table) {
 	g := t.Game
 
 	if t.Replay {
-		logger.Info(t.GetName() + "User \"" + s.Username() + "\" joined the replay.")
+		logger.Info(t.GetName() + "User \"" + s.Username + "\" joined the replay.")
 	} else {
-		logger.Info(t.GetName() + "User \"" + s.Username() + "\" spectated.")
+		logger.Info(t.GetName() + "User \"" + s.Username + "\" spectated.")
 	}
 
 	// Add them to the spectators object
 	sp := &Spectator{
-		ID:                   s.UserID(),
-		Name:                 s.Username(),
+		ID:                   s.UserID,
+		Name:                 s.Username,
 		Session:              s,
 		ShadowingPlayerIndex: d.ShadowingPlayerIndex,
 		Notes:                make([]string, g.GetNotesSize()),
@@ -101,8 +101,8 @@ func tableSpectate(s *Session, d *CommandData, t *Table) {
 		}
 	}
 	if s != nil {
-		s.Set("status", status)
-		s.Set("tableID", tableID)
+		s.Status = status
+		s.TableID = tableID
 		notifyAllUser(s)
 	}
 
