@@ -87,7 +87,17 @@ func (s *Session) Emit(command string, d interface{}) {
 }
 
 func (s *Session) Close() {
+	if s.Closed {
+		return
+	}
 
+
+		s.Mutex.Lock()
+		s.open = false
+		s.conn.Close()
+		close(s.output)
+		s.Mutex.Unlock()
+	}
 }
 
 func (s *Session) Warning(message string) {

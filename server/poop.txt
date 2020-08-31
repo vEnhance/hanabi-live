@@ -1,0 +1,27 @@
+think about the different data fields
+ - which are written to?
+ - which are static forever and do not need locks for?
+
+USE THE SESSION LOCKS BEFORE WRITING DATA
+
+
+
+
+		// Write
+
+
+
+
+
+	// Define a new Melody router
+	m = melody.New()
+
+	m.Config.MaxMessageSize = 8192
+
+	// Attach some handlers
+	m.HandleConnect(websocketConnect)
+	m.HandleDisconnect(websocketDisconnect)
+	m.HandleMessage(websocketMessage)
+	// We could also attach a function to HandleError, but this fires on routine
+	// things like disconnects, so it is undesirable
+}
