@@ -52,6 +52,9 @@ func commandNote(s *Session, d *CommandData) {
 		d.Note = d.Note[0 : MaxChatLength-1]
 	}
 
+	// Remove any non-printable characters, if any
+	d.Msg = removeNonPrintableCharacters(d.Msg)
+
 	// Check for valid UTF8
 	if !utf8.Valid([]byte(d.Note)) {
 		s.Warning("Notes must contain valid UTF8 characters.")
@@ -80,6 +83,7 @@ func commandNote(s *Session, d *CommandData) {
 	// Escape all HTML special characters (to stop various attacks against other players)
 	d.Msg = html.EscapeString(d.Msg)
 
+	logger.Debug("User \"" + s.Username() + "\" submitted a note of: " + d.Msg)
 	note(d, t, playerIndex, spectatorIndex)
 }
 

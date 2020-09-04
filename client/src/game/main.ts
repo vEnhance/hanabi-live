@@ -8,7 +8,14 @@ import * as usersDraw from '../lobby/usersDraw';
 import { closeAllTooltips } from '../misc';
 import * as sounds from '../sounds';
 import * as chat from './chat';
+import * as cursor from './ui/cursor';
 import HanabiUI from './ui/HanabiUI';
+
+export const init = () => {
+  $('#game').on('mouseenter mouseleave', () => {
+    cursor.set('default');
+  });
+};
 
 export const show = () => {
   globals.currentScreen = Screen.Game;

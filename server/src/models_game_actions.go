@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"strconv"
-	"strings"
+
+	"github.com/jackc/pgx/v4"
 )
 
 type GameActions struct{}
@@ -33,25 +33,31 @@ func (*GameActions) BulkInsert(gameActionRows []*GameActionRow) error {
 			target,
 			value
 		)
-		VALUES
+		VALUES %s
 	`
+	numArgsPerRow := 5
+	valueArgs := make([]interface{}, 0, numArgsPerRow*len(gameActionRows))
 	for _, gameActionRow := range gameActionRows {
-		SQLString += "(" +
-			strconv.Itoa(gameActionRow.GameID) + ", " +
-			strconv.Itoa(gameActionRow.Turn) + ", " +
-			strconv.Itoa(gameActionRow.Type) + ", " +
-			strconv.Itoa(gameActionRow.Target) + ", " +
-			strconv.Itoa(gameActionRow.Value) +
-			"), "
+		valueArgs = append(
+			valueArgs,
+			gameActionRow.GameID,
+			gameActionRow.Turn,
+			gameActionRow.Type,
+			gameActionRow.Target,
+			gameActionRow.Value,
+		)
 	}
-	SQLString = strings.TrimSuffix(SQLString, ", ")
+	SQLString = getBulkInsertSQLSimple(SQLString, numArgsPerRow, len(gameActionRows))
 
-	_, err := db.Exec(context.Background(), SQLString)
+	_, err := db.Exec(context.Background(), SQLString, valueArgs...)
 	return err
 }
 
 func (*GameActions) GetAll(databaseID int) ([]*GameAction, error) {
-	rows, err := db.Query(context.Background(), `
+	actions := make([]*GameAction, 0)
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), `
 		SELECT
 			type,
 			target,
@@ -59,25 +65,28 @@ func (*GameActions) GetAll(databaseID int) ([]*GameAction, error) {
 		FROM game_actions
 		WHERE game_id = $1
 		ORDER BY turn
-	`, databaseID)
+	`, databaseID); err != nil {
+		return actions, err
+	} else {
+		rows = v
+	}
 
 	// Iterate over all of the actions and add them to a slice
-	actions := make([]*GameAction, 0)
 	for rows.Next() {
 		var action GameAction
-		if err2 := rows.Scan(
+		if err := rows.Scan(
 			&action.Type,
 			&action.Target,
 			&action.Value,
-		); err2 != nil {
-			return nil, err2
+		); err != nil {
+			return actions, err
 		}
 
 		actions = append(actions, &action)
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return actions, err
 	}
 	rows.Close()
 

@@ -17,10 +17,9 @@ import CardLayout from './CardLayout';
 import ClueLog from './ClueLog';
 import * as clues from './clues';
 import ColorButton from './ColorButton';
-import { LABEL_COLOR } from './constants';
+import { LABEL_COLOR, CARD_ANIMATION_LENGTH } from './constants';
 import Arrow from './controls/Arrow';
 import Button from './controls/Button';
-import ClickArea from './controls/ClickArea';
 import CurrentPlayerArea from './controls/CurrentPlayerArea';
 import FitText from './controls/FitText';
 import ImageWithTooltip from './controls/ImageWithTooltip';
@@ -333,13 +332,8 @@ const drawPlayStacks = () => {
     const order = deck.totalCards(globals.variant) + i;
     globals.ourNotes.set(order, '');
     globals.allNotes.set(order, []);
-    const stackBase = new HanabiCard({
-      // Stack bases use card orders after the final card in the deck
-      order,
-      suitIndex: i,
-      rank: STACK_BASE_RANK,
-      listening: true,
-    }, globals.variant);
+    // Stack bases use card orders after the final card in the deck
+    const stackBase = new HanabiCard(order, i, STACK_BASE_RANK, globals.variant);
     globals.stackBases.push(stackBase);
 
     playStack.addChild(stackBase.layout);
@@ -399,7 +393,7 @@ const drawPlayStacks = () => {
     w,
     h: cardHeight,
   };
-  globals.elements.playArea = new ClickArea({
+  globals.elements.playArea = new Konva.Rect({
     x: (playAreaValues.x - overlap) * winW,
     y: (playAreaValues.y - overlap) * winH,
     width: (playAreaValues.w! + (overlap * 2)) * winW,
@@ -711,10 +705,10 @@ const drawScoreArea = () => {
   }) as Konva.Text;
   globals.elements.scoreArea.add(turnTextLabel);
   turnTextLabel.on('click', (event: Konva.KonvaEventObject<MouseEvent>) => {
-    if (event.evt.button === 0) { // Left-click
+    if (event.evt.buttons === 1) { // Left-click
       // We want to be able to left-click the turn number to go to a specific turn in the replay
       replay.promptTurn();
-    } else if (event.evt.button === 2) { // Right-click
+    } else if (event.evt.buttons === 2) { // Right-click
       arrows.click(event, ReplayArrowOrder.Clues, globals.elements.turnNumberLabel);
     }
   });
@@ -728,10 +722,10 @@ const drawScoreArea = () => {
   }) as Konva.Text;
   globals.elements.scoreArea.add(globals.elements.turnNumberLabel!);
   globals.elements.turnNumberLabel.on('click', (event: Konva.KonvaEventObject<MouseEvent>) => {
-    if (event.evt.button === 0) { // Left-click
+    if (event.evt.buttons === 1) { // Left-click
       // We want to be able to left-click the turn number to go to a specific turn in the replay
       replay.promptTurn();
-    } else if (event.evt.button === 2) { // Right-click
+    } else if (event.evt.buttons === 2) { // Right-click
       arrows.click(event, ReplayArrowOrder.Clues, globals.elements.turnNumberLabel);
     }
   });
@@ -831,7 +825,7 @@ const drawScoreArea = () => {
     fill: '#df1c2d',
     offsetX: 0.001 * winH,
     offsetY: 0.01 * winH,
-    duration: 0.5,
+    duration: CARD_ANIMATION_LENGTH,
     easing: Konva.Easings.EaseInOut,
     onFinish: () => {
       if (
@@ -1087,7 +1081,7 @@ const drawSharedReplay = () => {
     height: size * 2,
     offsetX: 0.025 * winH,
     offsetY: 0.025 * winH,
-    duration: 0.5,
+    duration: CARD_ANIMATION_LENGTH,
     easing: Konva.Easings.EaseInOut,
     onFinish: () => {
       if (
@@ -1396,7 +1390,7 @@ const drawDiscardArea = () => {
   globals.layers.UI.add(trashcan);
 
   // This is the invisible rectangle that players drag cards to in order to discard them
-  globals.elements.discardArea = new ClickArea({
+  globals.elements.discardArea = new Konva.Rect({
     x: 0.8 * winW,
     y: 0.6 * winH,
     width: 0.2 * winW,
@@ -1508,7 +1502,7 @@ const drawTimers = () => {
     });
   };
   globals.elements.timer1.on('click', (event: Konva.KonvaEventObject<MouseEvent>) => {
-    if (event.evt.button === 2) { // Right-click
+    if (event.evt.buttons === 2) { // Right-click
       timerClick();
     }
   });

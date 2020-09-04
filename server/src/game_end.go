@@ -60,7 +60,7 @@ func (g *Game) End() {
 
 	// Send a "gameHistory" message to all the players in the game
 	var numGamesOnThisSeed int
-	if v, err := models.Games.GetNumGamesOnThisSeed(g.Seed); err != nil {
+	if v, err := models.Seeds.GetNumGames(g.Seed); err != nil {
 		logger.Error("Failed to get the number of games on seed "+g.Seed+":", err)
 		return
 	} else {
@@ -244,6 +244,13 @@ func (g *Game) WriteDatabase() error {
 		}
 	}
 
+	// Finally, we update the seeds table with the number of games played on this seed
+	if err := models.Seeds.UpdateNumGames(g.Seed); err != nil {
+		logger.Error("Failed to update the number of games in the seeds table:", err)
+		// Do not return on a failed seeds update,
+		// since it should not affect subsequent operations
+	}
+
 	// We also need to update stats in the database, but that can be done in the background
 	go g.WriteDatabaseStats()
 
@@ -259,30 +266,14 @@ func (g *Game) WriteDatabaseStats() {
 	// Local variables
 	t := g.Table
 	variant := variants[g.Options.VariantName]
-
-	// Compute the integer modifier for this game,
-	// corresponding to the "ScoreModifier" constants in "constants.go"
-	var modifier Bitmask
-	if g.Options.DeckPlays {
-		modifier.AddFlag(ScoreModifierDeckPlays)
-	}
-	if g.Options.EmptyClues {
-		modifier.AddFlag(ScoreModifierEmptyClues)
-	}
-	if g.Options.OneExtraCard {
-		modifier.AddFlag(ScoreModifierOneExtraCard)
-	}
-	if g.Options.OneLessCard {
-		modifier.AddFlag(ScoreModifierOneLessCard)
-	}
-	if g.Options.AllOrNothing {
-		modifier.AddFlag(ScoreModifierAllOrNothing)
-	}
+	// 2-player is at index 0, 3-player is at index 1, etc.
+	bestScoreIndex := g.Options.NumPlayers - 2
 
 	// Update the variant-specific stats for each player
+	modifier := g.Options.GetModifier()
 	for _, p := range t.Players {
 		// Get their current best scores
-		var userStats UserStatsRow
+		var userStats *UserStatsRow
 		if v, err := models.UserStats.Get(p.ID, variant.ID); err != nil {
 			logger.Error("Failed to get the stats for user "+p.Name+":", err)
 			continue
@@ -290,12 +281,11 @@ func (g *Game) WriteDatabaseStats() {
 			userStats = v
 		}
 
-		// 2-player is at index 0, 3-player is at index 1, etc.
 		thisScore := &BestScore{
 			Score:    g.Score,
 			Modifier: modifier,
 		}
-		bestScore := userStats.BestScores[len(g.Players)-2]
+		bestScore := userStats.BestScores[bestScoreIndex]
 		if thisScore.IsBetterThan(bestScore) {
 			bestScore.Score = g.Score
 			bestScore.Modifier = modifier
@@ -321,8 +311,7 @@ func (g *Game) WriteDatabaseStats() {
 
 	// If the game was played with no modifiers, update the stats for this variant
 	if modifier == 0 {
-		// 2-player is at index 0, 3-player is at index 1, etc.
-		bestScore := variantStats.BestScores[len(g.Players)-2]
+		bestScore := variantStats.BestScores[bestScoreIndex]
 		if g.Score > bestScore.Score {
 			bestScore.Score = g.Score
 		}

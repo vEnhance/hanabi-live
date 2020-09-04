@@ -61,7 +61,10 @@ func (*VariantStats) Get(variantID int) (VariantStatsRow, error) {
 }
 
 func (*VariantStats) GetAll() (map[int]VariantStatsRow, error) {
-	rows, err := db.Query(context.Background(), `
+	statsMap := make(map[int]VariantStatsRow)
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), `
 		SELECT
 			variant_id,
 			num_games,
@@ -74,15 +77,18 @@ func (*VariantStats) GetAll() (map[int]VariantStatsRow, error) {
 			average_score,
 			num_strikeouts
 		FROM variant_stats
-	`)
+	`); err != nil {
+		return statsMap, err
+	} else {
+		rows = v
+	}
 
 	// Go through the stats for each variant
-	statsMap := make(map[int]VariantStatsRow)
 	for rows.Next() {
 		stats := NewVariantStatsRow()
 
 		var variantID int
-		if err2 := rows.Scan(
+		if err := rows.Scan(
 			&variantID,
 			&stats.NumGames,
 			&stats.BestScores[0].Score, // 2-player
@@ -93,15 +99,15 @@ func (*VariantStats) GetAll() (map[int]VariantStatsRow, error) {
 			&stats.NumMaxScores,
 			&stats.AverageScore,
 			&stats.NumStrikeouts,
-		); err2 != nil {
-			return nil, err2
+		); err != nil {
+			return statsMap, err
 		}
 
 		statsMap[variantID] = stats
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return statsMap, err
 	}
 	rows.Close()
 
@@ -125,8 +131,9 @@ func (*VariantStats) Update(variantID int, maxScore int, stats VariantStatsRow) 
 		return err
 	}
 	if numRows > 1 {
-		return errors.New("found more than 1 row in the \"variant_stats\" table for variant " +
-			strconv.Itoa(variantID))
+		return errors.New("found " + strconv.Itoa(numRows) +
+			" rows in the \"variant_stats\" table for variant " + strconv.Itoa(variantID) +
+			" (instead of 1 row)")
 	}
 	if numRows == 0 {
 		if _, err := db.Exec(context.Background(), `
@@ -199,19 +206,15 @@ func (vs *VariantStats) UpdateAll(highestVariantID int, maxScores []int) error {
 
 	for variantID := 0; variantID <= highestVariantID; variantID++ {
 		// Check to see if any users have played a game of this variant
-		var numRows int
+		var numGames int
 		if err := db.QueryRow(context.Background(), `
 			SELECT COUNT(id)
 			FROM games
 			WHERE variant_id = $1
-		`, variantID).Scan(&numRows); err != nil {
+		`, variantID).Scan(&numGames); err != nil {
 			return err
 		}
-		if numRows > 1 {
-			return errors.New("found more than 1 row in the \"variant_stats\" table for variant " +
-				strconv.Itoa(variantID))
-		}
-		if numRows == 0 {
+		if numGames == 0 {
 			// We don't need to insert a new row for this variant
 			continue
 		}
@@ -221,7 +224,7 @@ func (vs *VariantStats) UpdateAll(highestVariantID int, maxScores []int) error {
 		for numPlayers := 2; numPlayers <= 6; numPlayers++ {
 			overallBestScore := 0
 
-			// Get the score for this player count (using no modifiers)
+			// Get the score for this player count (using a modifier of 0)
 			var bestScore int
 			if err := db.QueryRow(context.Background(), `
 				/*
@@ -234,6 +237,8 @@ func (vs *VariantStats) UpdateAll(highestVariantID int, maxScores []int) error {
 					AND num_players = $2
 					AND games.deck_plays = FALSE
 					AND games.empty_clues = FALSE
+					AND games.one_extra_card = FALSE
+					AND games.one_less_card = FALSE
 					AND games.all_or_nothing = FALSE
 			`, variantID, numPlayers).Scan(&bestScore); err != nil {
 				return err

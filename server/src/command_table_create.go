@@ -68,6 +68,9 @@ func commandTableCreate(s *Session, d *CommandData) {
 		d.Name = d.Name[0 : MaxGameNameLength-1]
 	}
 
+	// Remove any non-printable characters, if any
+	d.Name = removeNonPrintableCharacters(d.Name)
+
 	// Trim whitespace from both sides
 	d.Name = strings.TrimSpace(d.Name)
 
@@ -77,7 +80,7 @@ func commandTableCreate(s *Session, d *CommandData) {
 	}
 
 	// Check for non-ASCII characters
-	if !isPrintableASCII(d.Name) {
+	if !containsAllPrintableASCII(d.Name) {
 		s.Warning("Game names can only contain ASCII characters.")
 		return
 	}
@@ -293,8 +296,6 @@ func tableCreate(s *Session, d *CommandData, data *SpecialGameData) {
 		DatabaseID:       data.DatabaseID,
 		CustomNumPlayers: data.CustomNumPlayers,
 		SetSeedSuffix:    data.SetSeedSuffix,
-		SetReplay:        data.SetReplay,
-		SetReplayTurn:    data.SetReplayTurn,
 	}
 
 	// If this is a "!replay" game, override the options with the ones found in the database
@@ -310,6 +311,10 @@ func tableCreate(s *Session, d *CommandData, data *SpecialGameData) {
 		// "loadDatabaseOptionsToTable()" marks that the game should not be written to the database,
 		// which is not true in this special case
 		t.ExtraOptions.NoWriteToDatabase = false
+
+		// "loadDatabaseOptionsToTable()" does not specify the "!replay" options
+		t.ExtraOptions.SetReplay = data.SetReplay
+		t.ExtraOptions.SetReplayTurn = data.SetReplayTurn
 	}
 
 	// If the user specified JSON data,

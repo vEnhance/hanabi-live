@@ -91,13 +91,11 @@ func (s *Session) Close() {
 		return
 	}
 
-
-		s.Mutex.Lock()
-		s.open = false
-		s.conn.Close()
-		close(s.output)
-		s.Mutex.Unlock()
-	}
+	s.Mutex.Lock()
+	s.open = false
+	s.conn.Close()
+	close(s.output)
+	s.Mutex.Unlock()
 }
 
 func (s *Session) Warning(message string) {

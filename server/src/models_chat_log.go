@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v4"
 )
 
 type ChatLog struct{}
@@ -28,18 +29,16 @@ func (*ChatLog) Insert(userID int, message string, room string) error {
 func (*ChatLog) BulkInsert(chatLogRows []*ChatLogRow) error {
 	SQLString := `
 		INSERT INTO chat_log (user_id, message, room)
-		VALUES
+		VALUES %s
 	`
+	numArgsPerRow := 3
+	valueArgs := make([]interface{}, 0, numArgsPerRow*len(chatLogRows))
 	for _, chatLogRow := range chatLogRows {
-		SQLString += "(" +
-			strconv.Itoa(chatLogRow.UserID) + ", " +
-			"'" + chatLogRow.Message + "', " +
-			"'" + chatLogRow.Room + "'" +
-			"), "
+		valueArgs = append(valueArgs, chatLogRow.UserID, chatLogRow.Message, chatLogRow.Room)
 	}
-	SQLString = strings.TrimSuffix(SQLString, ", ")
+	SQLString = getBulkInsertSQLSimple(SQLString, numArgsPerRow, len(chatLogRows))
 
-	_, err := db.Exec(context.Background(), SQLString)
+	_, err := db.Exec(context.Background(), SQLString, valueArgs...)
 	return err
 }
 
@@ -60,6 +59,8 @@ type DBChatMessage struct {
 
 // Get the past messages sent in the lobby
 func (*ChatLog) Get(room string, count int) ([]DBChatMessage, error) {
+	chatMessages := make([]DBChatMessage, 0)
+
 	SQLString := `
 		SELECT
 			COALESCE(users.username, '__server'),
@@ -79,24 +80,28 @@ func (*ChatLog) Get(room string, count int) ([]DBChatMessage, error) {
 		SQLString += "LIMIT " + strconv.Itoa(count)
 	}
 
-	rows, err := db.Query(context.Background(), SQLString, room)
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString, room); err != nil {
+		return chatMessages, err
+	} else {
+		rows = v
+	}
 
-	chatMessages := make([]DBChatMessage, 0)
 	for rows.Next() {
 		var message DBChatMessage
-		if err2 := rows.Scan(
+		if err := rows.Scan(
 			&message.Name,
 			&message.DiscordName,
 			&message.Message,
 			&message.Datetime,
-		); err2 != nil {
-			return nil, err2
+		); err != nil {
+			return chatMessages, err
 		}
 		chatMessages = append(chatMessages, message)
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return chatMessages, err
 	}
 	rows.Close()
 

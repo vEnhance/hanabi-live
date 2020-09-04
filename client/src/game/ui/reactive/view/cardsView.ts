@@ -17,9 +17,7 @@ export const onCardsPossiblyAdded = (length: number) => {
       if (globals.allNotes.get(i) === undefined) {
         globals.allNotes.set(i, []);
       }
-      const newCard = new HanabiCard({
-        order: i,
-      }, globals.variant);
+      const newCard = new HanabiCard(i, null, null, globals.variant);
       globals.deck.push(newCard);
     }
     const subscription = subscribeToCardChanges(i);
@@ -129,11 +127,13 @@ const subscribeToCardChanges = (order: number) => {
     possibleCardsFromObservation: c.possibleCardsFromObservation,
     numPositiveRankClues: c.positiveRankClues.length,
   }), () => updatePips(order));
+
   // Notes
   sub((c) => ({
     possibleCardsFromClues: c.possibleCardsFromClues,
     possibleCardsFromObservation: c.possibleCardsFromObservation,
-  }), () => updateNotePossibilities(order));
+  }), () => checkNoteDisproved(order));
+
   // Card visuals
   subFullState((s) => {
     const card = s.visibleState!.deck[order];
@@ -155,7 +155,13 @@ const subscribeToCardChanges = (order: number) => {
 
 const updateBorder = (order: number) => {
   const card = getCardOrStackBase(order);
+
+  // When cards have one or more positive clues, they get a special border
   card.setBorder();
+
+  // When cards have one or more positive clues, they are raised up in the hand
+  card.setRaiseAndShadowOffset();
+
   globals.layers.card.batchDraw();
 };
 
@@ -171,9 +177,9 @@ const updateCardVisuals = (order: number) => {
   globals.layers.card.batchDraw();
 };
 
-const updateNotePossibilities = (order: number) => {
+const checkNoteDisproved = (order: number) => {
   const card = getCardOrStackBase(order);
-  card.updateNotePossibilities();
+  card.checkNoteDisproved();
   globals.layers.card.batchDraw();
 };
 

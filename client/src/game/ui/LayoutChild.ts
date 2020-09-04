@@ -7,7 +7,7 @@ import { cardRules, clueTokensRules } from '../rules';
 import * as variantRules from '../rules/variant';
 import ActionType from '../types/ActionType';
 import CardLayout from './CardLayout';
-import cursorSet from './cursorSet';
+import * as cursor from './cursor';
 import globals from './globals';
 import HanabiCard from './HanabiCard';
 import isOurTurn from './isOurTurn';
@@ -16,6 +16,7 @@ import * as turn from './turn';
 
 export default class LayoutChild extends Konva.Group {
   tween: Konva.Tween | null = null;
+  doMisplayAnimation: boolean = false;
   blank: boolean = false;
 
   private _card: HanabiCard;
@@ -59,39 +60,14 @@ export default class LayoutChild extends Konva.Group {
 
     if (this.shouldBeDraggable(globals.state.visibleState.turn.currentPlayerIndex)) {
       this.draggable(true);
-      this.on('dragstart', this.dragStart);
       this.on('dragend', this.dragEnd);
-      this.on('mousemove', (event: Konva.KonvaEventObject<MouseEvent>) => {
-        if (event.evt.buttons % 2 === 1) { // Left-click is being held down
-          cursorSet('dragging');
-          this.card.setVisualEffect('dragging');
-        } else {
-          cursorSet('hand');
-          this.card.setVisualEffect('hand');
-        }
-      });
-      this.on('mouseleave', () => {
-        cursorSet('default');
-        this.card.setVisualEffect('default');
-      });
-      this.on('mousedown', (event: Konva.KonvaEventObject<MouseEvent>) => {
-        if (event.evt.buttons % 2 === 1) { // Left-click is being held down
-          cursorSet('dragging');
-          this.card.setVisualEffect('dragging');
-        }
-      });
-      this.on('mouseup', () => {
-        cursorSet('hand');
-        this.card.setVisualEffect('hand');
-      });
     } else {
       this.draggable(false);
-      this.off('dragstart');
       this.off('dragend');
-      this.off('mousemove');
-      this.off('mouseleave');
-      this.off('mousedown');
-      this.off('mouseup');
+    }
+
+    if (cursor.elementOverlaps(this)) {
+      this.card.setCursor();
     }
   }
 
@@ -131,46 +107,28 @@ export default class LayoutChild extends Konva.Group {
     );
   }
 
-  dragStart() {
-    // Ideally, we would have a check to only make a card draggable with a left click
-    // However, checking for "event.evt.buttons !== 1" will break iPads
-
-    // In a hypothetical, dragging a rotated card from another person's hand is frustrating,
-    // so temporarily remove all rotation (for the duration of the drag)
-    // The rotation will be automatically reset if the card tweens back to the hand
-    if (globals.state.replay.hypothetical !== null) {
-      this.rotation(this.parent!.rotation() * -1);
-    }
-  }
-
   dragEnd() {
-    // We have released the mouse button, so immediately set the cursor back to the default
-    cursorSet('default');
-    this.card.setVisualEffect('default');
+    // Mouse events will not normally fire when the card is released from being dragged
+    this.card.dispatchEvent(new MouseEvent('mouseup'));
+    this.card.dispatchEvent(new MouseEvent('mouseleave'));
+
+    this.draggable(false);
 
     // We have to unregister the handler or else it will send multiple actions for one drag
-    this.draggable(false);
-    this.off('dragstart');
     this.off('dragend');
 
-    // Find out where we dragged this card to
-    const pos = this.getAbsolutePosition();
-    pos.x += this.width() * this.scaleX() / 2;
-    pos.y += this.height() * this.scaleY() / 2;
-
-    let draggedTo = null;
-    if (globals.elements.playArea!.isOver(pos)) {
-      draggedTo = 'playArea';
-    } else if (globals.elements.discardArea!.isOver(pos)) {
-      if (clueTokensRules.atMax(globals.state.ongoingGame.clueTokens, globals.variant)) {
-        sounds.play('error');
-        globals.elements.cluesNumberLabelPulse!.play();
-      } else {
-        draggedTo = 'discardArea';
-      }
+    let draggedTo = cursor.getElementDragLocation(this);
+    if (
+      draggedTo === 'discardArea'
+      && clueTokensRules.atMax(globals.state.ongoingGame.clueTokens, globals.variant)
+    ) {
+      sounds.play('error');
+      globals.elements.cluesNumberLabelPulse!.play();
+      draggedTo = null;
     }
-
-    draggedTo = this.checkMisplay(draggedTo);
+    if (draggedTo === 'playArea' && this.checkMisplay()) {
+      draggedTo = null;
+    }
 
     if (draggedTo === null) {
       // The card was dragged to an invalid location; tween it back to the hand
@@ -187,39 +145,30 @@ export default class LayoutChild extends Konva.Group {
       throw new Error(`Unknown drag location of "${draggedTo}".`);
     }
 
-    const card = this.children[0] as unknown as HanabiCard;
-
-    // Ensure that empathy is disabled prior to ending the turn
-    // (this is needed for hypotheticals,
-    // since it uses the visual suit of the card to determine if it will play)
-    card.setEmpathy(false);
-
     turn.end({
       type,
-      target: card.state.order,
+      target: this.card.state.order,
     });
   }
 
   // Before we play a card,
   // do a check to ensure that it is actually playable to prevent silly mistakes from players
   // (but disable this in speedruns and certain variants)
-  checkMisplay(draggedTo: string | null) {
+  checkMisplay() {
     const currentPlayerIndex = globals.state.ongoingGame.turn.currentPlayerIndex;
     const ourPlayerIndex = globals.metadata.ourPlayerIndex;
-    const card = this.children[0] as unknown as HanabiCard;
     let ongoingGame = globals.state.ongoingGame;
     if (globals.state.replay.hypothetical !== null) {
       ongoingGame = globals.state.replay.hypothetical.ongoing;
     }
 
     if (
-      draggedTo === 'playArea'
-      && !globals.options.speedrun
+      !globals.options.speedrun
       && !variantRules.isThrowItInAHole(globals.variant)
       // Don't use warnings for preplays unless we are at 2 strikes
       && (currentPlayerIndex === ourPlayerIndex || ongoingGame.strikes.length === 2)
       && !cardRules.isPotentiallyPlayable(
-        card.state,
+        this.card.state,
         ongoingGame.deck,
         ongoingGame.playStacks,
         ongoingGame.playStackDirections,
@@ -228,11 +177,9 @@ export default class LayoutChild extends Konva.Group {
       let text = 'Are you sure you want to play this card?\n';
       text += 'It is known to be unplayable based on the current information\n';
       text += 'available to you. (e.g. positive clues, negative clues, cards seen, etc.)';
-      if (!window.confirm(text)) {
-        return null;
-      }
+      return !window.confirm(text);
     }
 
-    return draggedTo;
+    return false;
   }
 }

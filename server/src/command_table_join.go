@@ -97,8 +97,8 @@ func tableJoin(s *Session, t *Table) {
 	}
 
 	// Get the variant-specific stats for this player
-	var variantStats UserStatsRow
-	if v, err := models.UserStats.Get(s.UserID, variant.ID); err != nil {
+	var variantStats *UserStatsRow
+	if v, err := models.UserStats.Get(s.UserID(), variant.ID); err != nil {
 		logger.Error("Failed to get the stats for player \""+s.Username+"\" for variant "+
 			strconv.Itoa(variant.ID)+":", err)
 		s.Error("Something went wrong when getting your stats. Please contact an administrator.")
@@ -171,22 +171,17 @@ func tableJoin(s *Session, t *Table) {
 		return
 	}
 
-	// Play a notification sound if it has been more than 15 seconds since the last person joined
-	if time.Since(t.DatetimeLastJoined) <= time.Second*15 {
-		return
-	}
+	// Update the "DatetimeLastJoined" field, but make a copy first
+	datetimeLastJoined := t.DatetimeLastJoined
 	t.DatetimeLastJoined = time.Now()
 
-	type SoundLobbyMessage struct {
-		File string `json:"file"`
-	}
-	soundLobbyMessage := &SoundLobbyMessage{
-		File: "someone_joined",
-	}
-	for _, p2 := range t.Players {
-		// Skip sending a message to the player that just joined
-		if p2.ID != p.ID {
-			p2.Session.Emit("soundLobby", soundLobbyMessage)
+	// Play a notification sound if it has been more than 15 seconds since the last person joined
+	if time.Since(datetimeLastJoined) > time.Second*15 {
+		for _, p2 := range t.Players {
+			// Skip sending a message to the player that just joined
+			if p2.ID != p.ID {
+				p2.Session.NotifySoundLobby("someone_joined")
+			}
 		}
 	}
 }

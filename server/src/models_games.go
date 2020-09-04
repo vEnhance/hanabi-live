@@ -144,6 +144,8 @@ func (g *Games) GetHistory(gameIDs []int) ([]*GameHistory, error) {
 }
 
 func (*Games) GetHistoryCustomSort(gameIDs []int, sort string) ([]*GameHistory, error) {
+	games := make([]*GameHistory, 0)
+
 	// We rename "games" to "games1" so that the subquery can access their values
 	// (otherwise, the table names would conflict)
 	SQLString := `
@@ -169,9 +171,16 @@ func (*Games) GetHistoryCustomSort(gameIDs []int, sort string) ([]*GameHistory, 
 			games1.datetime_started,
 			games1.datetime_finished,
 			(
-				SELECT COUNT(games2.id)
-				FROM games AS games2
-				WHERE games2.seed = games1.seed
+				/*
+				 * We use a "COALESCE" to return 0 if the corresponding row in the "seeds" table
+				 * does not exist
+				 * This row should always exist, but check it just to be safe
+				 */
+				SELECT COALESCE((
+					SELECT seeds.num_games
+					FROM seeds
+					WHERE seeds.seed = games1.seed
+				), 0)
 			) AS num_games_on_this_seed,
 			(
 				SELECT STRING_AGG(users.username, ', ')
@@ -188,16 +197,20 @@ func (*Games) GetHistoryCustomSort(gameIDs []int, sort string) ([]*GameHistory, 
 	`
 	SQLString += "ORDER BY games1." + sort
 
-	rows, err := db.Query(context.Background(), SQLString, gameIDs)
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString, gameIDs); err != nil {
+		return games, err
+	} else {
+		rows = v
+	}
 
-	games := make([]*GameHistory, 0)
 	for rows.Next() {
 		gameHistory := GameHistory{
 			Options: &Options{},
 		}
 		var variantID int
 		var playerNamesString string
-		if err2 := rows.Scan(
+		if err := rows.Scan(
 			&gameHistory.ID,
 			&gameHistory.Options.NumPlayers,
 			&variantID,
@@ -220,13 +233,14 @@ func (*Games) GetHistoryCustomSort(gameIDs []int, sort string) ([]*GameHistory, 
 			&gameHistory.DatetimeFinished,
 			&gameHistory.NumGamesOnThisSeed,
 			&playerNamesString,
-		); err2 != nil {
-			return nil, err2
+		); err != nil {
+			return games, err
 		}
 
 		// Get the name of the variant that corresponds to the variant ID
 		if variantName, ok := variantIDMap[variantID]; !ok {
-			return nil, errors.New("the variant ID of " + strconv.Itoa(variantID) + " is not valid")
+			err := errors.New("the variant ID of " + strconv.Itoa(variantID) + " is not valid")
+			return games, err
 		} else {
 			gameHistory.Options.VariantName = variantName
 		}
@@ -241,8 +255,8 @@ func (*Games) GetHistoryCustomSort(gameIDs []int, sort string) ([]*GameHistory, 
 		games = append(games, &gameHistory)
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return games, err
 	}
 	rows.Close()
 
@@ -250,6 +264,8 @@ func (*Games) GetHistoryCustomSort(gameIDs []int, sort string) ([]*GameHistory, 
 }
 
 func (*Games) GetGameIDsUser(userID int, offset int, amount int) ([]int, error) {
+	gameIDs := make([]int, 0)
+
 	SQLString := `
 		SELECT games.id
 		FROM games
@@ -257,21 +273,35 @@ func (*Games) GetGameIDsUser(userID int, offset int, amount int) ([]int, error) 
 		WHERE game_participants.user_id = $1
 		/* We must get the results in decending order for the limit to work properly */
 		ORDER BY games.id DESC
-		LIMIT $2 OFFSET $3
 	`
+	if amount > 0 {
+		SQLString += "LIMIT $2 OFFSET $3"
+	}
 
-	rows, err := db.Query(context.Background(), SQLString, userID, amount, offset)
+	var rows pgx.Rows
+	if amount > 0 {
+		if v, err := db.Query(context.Background(), SQLString, userID, amount, offset); err != nil {
+			return gameIDs, err
+		} else {
+			rows = v
+		}
+	} else {
+		if v, err := db.Query(context.Background(), SQLString, userID); err != nil {
+			return gameIDs, err
+		} else {
+			rows = v
+		}
+	}
 
-	gameIDs := make([]int, 0)
 	for rows.Next() {
 		var gameID int
-		if err2 := rows.Scan(&gameID); err2 != nil {
-			return gameIDs, err2
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
 		}
 		gameIDs = append(gameIDs, gameID)
 	}
 
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
 		return gameIDs, err
 	}
 	rows.Close()
@@ -280,24 +310,30 @@ func (*Games) GetGameIDsUser(userID int, offset int, amount int) ([]int, error) 
 }
 
 func (*Games) GetGameIDsSeed(seed string) ([]int, error) {
+	gameIDs := make([]int, 0)
+
 	SQLString := `
 		SELECT id
 		FROM games
 		WHERE seed = $1
 	`
 
-	rows, err := db.Query(context.Background(), SQLString, seed)
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString, seed); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
 
-	gameIDs := make([]int, 0)
 	for rows.Next() {
 		var gameID int
-		if err2 := rows.Scan(&gameID); err2 != nil {
-			return gameIDs, err2
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
 		}
 		gameIDs = append(gameIDs, gameID)
 	}
 
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
 		return gameIDs, err
 	}
 	rows.Close()
@@ -311,6 +347,8 @@ func (*Games) GetGameIDsFriends(
 	offset int,
 	amount int,
 ) ([]int, error) {
+	gameIDs := make([]int, 0)
+
 	friendIDs := make([]int, 0)
 	for friendID := range friends {
 		friendIDs = append(friendIDs, friendID)
@@ -335,18 +373,29 @@ func (*Games) GetGameIDsFriends(
 		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := db.Query(context.Background(), SQLString, friendIDs, userID, amount, offset)
+	var rows pgx.Rows
+	if v, err := db.Query(
+		context.Background(),
+		SQLString,
+		friendIDs,
+		userID,
+		amount,
+		offset,
+	); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
 
-	gameIDs := make([]int, 0)
 	for rows.Next() {
 		var gameID int
-		if err2 := rows.Scan(&gameID); err2 != nil {
-			return gameIDs, err2
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
 		}
 		gameIDs = append(gameIDs, gameID)
 	}
 
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
 		return gameIDs, err
 	}
 	rows.Close()
@@ -355,6 +404,8 @@ func (*Games) GetGameIDsFriends(
 }
 
 func (*Games) GetGameIDsMultiUser(userIDs []int) ([]int, error) {
+	gameIDs := make([]int, 0)
+
 	SQLString := `
 		SELECT DISTINCT games.id
 		FROM games
@@ -365,18 +416,22 @@ func (*Games) GetGameIDsMultiUser(userIDs []int) ([]int, error) {
 		SQLString += "AND player" + strconv.Itoa(id) + "_games.user_id = " + strconv.Itoa(id) + " "
 	}
 
-	rows, err := db.Query(context.Background(), SQLString)
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
 
-	gameIDs := make([]int, 0)
 	for rows.Next() {
 		var gameID int
-		if err2 := rows.Scan(&gameID); err2 != nil {
-			return gameIDs, err2
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
 		}
 		gameIDs = append(gameIDs, gameID)
 	}
 
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
 		return gameIDs, err
 	}
 	rows.Close()
@@ -385,6 +440,8 @@ func (*Games) GetGameIDsMultiUser(userIDs []int) ([]int, error) {
 }
 
 func (*Games) GetGameIDsVariant(variantID int, amount int) ([]int, error) {
+	gameIDs := make([]int, 0)
+
 	SQLString := `
 		SELECT id
 		FROM games
@@ -394,18 +451,123 @@ func (*Games) GetGameIDsVariant(variantID int, amount int) ([]int, error) {
 		LIMIT $2
 	`
 
-	rows, err := db.Query(context.Background(), SQLString, variantID, amount)
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString, variantID, amount); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
 
-	gameIDs := make([]int, 0)
 	for rows.Next() {
 		var gameID int
-		if err2 := rows.Scan(&gameID); err2 != nil {
-			return gameIDs, err2
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
 		}
 		gameIDs = append(gameIDs, gameID)
 	}
 
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
+		return gameIDs, err
+	}
+	rows.Close()
+
+	return gameIDs, nil
+}
+
+func (*Games) GetGameIDsPastX(amount int) ([]int, error) {
+	gameIDs := make([]int, 0)
+
+	SQLString := `
+		SELECT id
+		FROM games
+		/* We must get the results in decending order for the limit to work properly */
+		ORDER BY id DESC
+		LIMIT $1
+	`
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString, amount); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
+
+	for rows.Next() {
+		var gameID int
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
+		}
+		gameIDs = append(gameIDs, gameID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return gameIDs, err
+	}
+	rows.Close()
+
+	return gameIDs, nil
+}
+
+func (*Games) GetGameIDsSinceDatetime(datetime string) ([]int, error) {
+	gameIDs := make([]int, 0)
+
+	SQLString := `
+		SELECT id
+		FROM games
+		/* We must get the results in decending order for the limit to work properly */
+		ORDER BY id DESC
+		WHERE datetime_started > $1
+	`
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString, datetime); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
+
+	for rows.Next() {
+		var gameID int
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
+		}
+		gameIDs = append(gameIDs, gameID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return gameIDs, err
+	}
+	rows.Close()
+
+	return gameIDs, nil
+}
+
+func (*Games) GetGameIDsSinceInterval(interval string) ([]int, error) {
+	gameIDs := make([]int, 0)
+
+	SQLString := `
+		SELECT id
+		FROM games
+		WHERE datetime_started > NOW() - INTERVAL
+	`
+	SQLString += "'" + interval + "'" // We can't use $1 for intervals for some reason
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), SQLString); err != nil {
+		return gameIDs, err
+	} else {
+		rows = v
+	}
+
+	for rows.Next() {
+		var gameID int
+		if err := rows.Scan(&gameID); err != nil {
+			return gameIDs, err
+		}
+		gameIDs = append(gameIDs, gameID)
+	}
+
+	if err := rows.Err(); err != nil {
 		return gameIDs, err
 	}
 	rows.Close()
@@ -427,19 +589,6 @@ func (*Games) GetUserNumGames(userID int, includeSpeedrun bool) (int, error) {
 	if err := db.QueryRow(context.Background(), SQLString, userID).Scan(&count); err != nil {
 		return 0, err
 	}
-	return count, nil
-}
-
-func (*Games) GetNumGamesOnThisSeed(seed string) (int, error) {
-	var count int
-	if err := db.QueryRow(context.Background(), `
-		SELECT COUNT(id)
-		FROM games
-		WHERE seed = $1
-	`, seed).Scan(&count); err != nil {
-		return 0, err
-	}
-
 	return count, nil
 }
 
@@ -544,7 +693,10 @@ type DBPlayer struct {
 }
 
 func (*Games) GetPlayers(databaseID int) ([]*DBPlayer, error) {
-	rows, err := db.Query(context.Background(), `
+	players := make([]*DBPlayer, 0)
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), `
 		SELECT
 			users.id AS user_id,
 			users.username AS username,
@@ -555,24 +707,27 @@ func (*Games) GetPlayers(databaseID int) ([]*DBPlayer, error) {
 			JOIN users ON game_participants.user_id = users.id
 		WHERE games.id = $1
 		ORDER BY game_participants.seat
-	`, databaseID)
+	`, databaseID); err != nil {
+		return players, err
+	} else {
+		rows = v
+	}
 
-	players := make([]*DBPlayer, 0)
 	for rows.Next() {
 		var player DBPlayer
-		if err2 := rows.Scan(
+		if err := rows.Scan(
 			&player.ID,
 			&player.Name,
 			&player.CharacterAssignment,
 			&player.CharacterMetadata,
-		); err2 != nil {
-			return nil, err2
+		); err != nil {
+			return players, err
 		}
 		players = append(players, &player)
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return players, err
 	}
 	rows.Close()
 
@@ -580,28 +735,34 @@ func (*Games) GetPlayers(databaseID int) ([]*DBPlayer, error) {
 }
 
 func (*Games) GetPlayerSeeds(userID int, variantID int) ([]string, error) {
+	seeds := make([]string, 0)
+
 	// We want to use "DISCTINCT" since it is possible for a player to play on the same seed twice
 	// with the "!seed" feature or the "!replay" feature
-	rows, err := db.Query(context.Background(), `
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), `
 		SELECT DISTINCT games.seed AS seed
 		FROM games
 			JOIN game_participants ON games.id = game_participants.game_id
 		WHERE game_participants.user_id = $1
 			AND games.variant_id = $2
 		ORDER BY seed
-	`, userID, variantID)
+	`, userID, variantID); err != nil {
+		return seeds, err
+	} else {
+		rows = v
+	}
 
-	seeds := make([]string, 0)
 	for rows.Next() {
 		var seed string
-		if err2 := rows.Scan(&seed); err2 != nil {
-			return nil, err2
+		if err := rows.Scan(&seed); err != nil {
+			return seeds, err
 		}
 		seeds = append(seeds, seed)
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return seeds, err
 	}
 	rows.Close()
 
@@ -609,7 +770,13 @@ func (*Games) GetPlayerSeeds(userID int, variantID int) ([]string, error) {
 }
 
 func (*Games) GetNotes(databaseID int, numPlayers int, noteSize int) ([][]string, error) {
-	rows, err := db.Query(context.Background(), `
+	allPlayersNotes := make([][]string, numPlayers)
+	for i := 0; i < numPlayers; i++ {
+		allPlayersNotes[i] = make([]string, noteSize)
+	}
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), `
 		SELECT
 			game_participants.seat AS seat,
 			game_participant_notes.card_order AS card_order,
@@ -619,19 +786,19 @@ func (*Games) GetNotes(databaseID int, numPlayers int, noteSize int) ([][]string
 			JOIN game_participant_notes ON game_participants.id = game_participant_notes.game_participant_id
 		WHERE games.id = $1
 		ORDER BY game_participants.seat, game_participant_notes.card_order
-	`, databaseID)
+	`, databaseID); err != nil {
+		return allPlayersNotes, err
+	} else {
+		rows = v
+	}
 
 	// These rows contain the notes for all of the players in the game, one row for each note
-	allPlayersNotes := make([][]string, numPlayers)
-	for i := 0; i < numPlayers; i++ {
-		allPlayersNotes[i] = make([]string, noteSize)
-	}
 	for rows.Next() {
 		var seat int
 		var order int
 		var note string
-		if err2 := rows.Scan(&seat, &order, &note); err2 != nil {
-			return nil, err2
+		if err := rows.Scan(&seat, &order, &note); err != nil {
+			return allPlayersNotes, err
 		}
 
 		if seat > len(allPlayersNotes)-1 {
@@ -649,8 +816,8 @@ func (*Games) GetNotes(databaseID int, numPlayers int, noteSize int) ([][]string
 		allPlayersNotes[seat][order] = note
 	}
 
-	if rows.Err() != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return allPlayersNotes, err
 	}
 	rows.Close()
 
@@ -841,22 +1008,28 @@ func (*Games) GetVariantStats(variantID int) (Stats, error) {
 }
 
 func (*Games) GetAllIDs() ([]int, error) {
-	rows, err := db.Query(context.Background(), `
+	ids := make([]int, 0)
+
+	var rows pgx.Rows
+	if v, err := db.Query(context.Background(), `
 		SELECT id
 		FROM games
 		ORDER BY id
-	`)
+	`); err != nil {
+		return ids, err
+	} else {
+		rows = v
+	}
 
-	ids := make([]int, 0)
 	for rows.Next() {
 		var id int
-		if err2 := rows.Scan(&id); err2 != nil {
-			return ids, err2
+		if err := rows.Scan(&id); err != nil {
+			return ids, err
 		}
 		ids = append(ids, id)
 	}
 
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
 		return ids, err
 	}
 	rows.Close()
