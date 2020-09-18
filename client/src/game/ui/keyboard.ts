@@ -119,8 +119,8 @@ const keydown = (event: JQuery.KeyDownEvent) => {
     if ($('#game-chat-input').is(':focus')) {
       return;
     }
-    // Don't activate practiceMode in non-replays
-    if (!globals.state.finished) {
+    // Don't activate practiceMode in non-shared replays
+    if (!globals.state.finished || globals.state.replay.shared !== null) {
       return;
     }
     globals.practiceModeEnabled = !globals.practiceModeEnabled;
