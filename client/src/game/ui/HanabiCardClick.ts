@@ -123,7 +123,10 @@ const clickRight = (card: HanabiCard, event: MouseEvent) => {
   }
 
   // Right-click in a solo replay just prints out the order of the card
-  if (globals.state.finished && globals.state.replay.shared === null) {
+  if (
+    globals.state.finished
+    && globals.state.replay.shared === null
+    && !globals.practiceModeEnabled) {
     console.log(`This card's order is: ${card.state.order}`);
     return;
   }
@@ -148,7 +151,7 @@ const clickRight = (card: HanabiCard, event: MouseEvent) => {
     && event.shiftKey
     && !event.altKey
     && !event.metaKey
-    && globals.state.playing
+    && (globals.state.playing || globals.practiceModeEnabled)
   ) {
     card.appendNote('f');
     return;
@@ -161,7 +164,7 @@ const clickRight = (card: HanabiCard, event: MouseEvent) => {
     && !event.shiftKey
     && event.altKey
     && !event.metaKey
-    && globals.state.playing
+    && (globals.state.playing || globals.practiceModeEnabled)
   ) {
     card.appendNote('cm');
     return;
@@ -189,7 +192,7 @@ const clickRight = (card: HanabiCard, event: MouseEvent) => {
     && !event.shiftKey
     && !event.altKey
     && !event.metaKey
-    && !globals.state.finished
+    && (!globals.state.finished || globals.practiceModeEnabled)
   ) {
     notes.openEditTooltip(card);
   }

@@ -330,6 +330,15 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
   }
 
   getSuitToShow(cardIdentity: CardIdentity, unknownSuit: Suit) {
+    // If we have a note identity in practice mode, show it
+    if (
+      globals.practiceModeEnabled
+      && this.note.suitIndex !== null
+      && this.state.location === globals.metadata.ourPlayerIndex
+    ) {
+      return this.variant.suits[this.note.suitIndex];
+    }
+
     // If we are in Empathy mode, only show the suit if there is only one possibility left
     if (this.empathy) {
       if (this.state.suitIndex !== null && this.state.suitDetermined) {
@@ -353,6 +362,16 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
   }
 
   getRankToShow(cardIdentity: CardIdentity) {
+    // If we have a note identity in practice mode, show it
+    if (
+      globals.practiceModeEnabled
+      && this.note.rank !== null
+      && this.state.rank !== null
+      && this.state.location === globals.metadata.ourPlayerIndex
+    ) {
+      return this.note.rank;
+    }
+
     // If we are in Empathy mode, only show the rank if there is only one possibility left
     if (this.empathy) {
       if (this.state.rankDetermined && this.state.rank !== null) {
@@ -456,7 +475,7 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
       // The clue border and the finesse border have precedence over the chop move border
       && !this.shouldShowClueBorder()
       && !this.shouldShowFinesseBorder()
-      && globals.state.playing
+      && (globals.state.playing || globals.practiceModeEnabled)
     );
   }
 
@@ -466,7 +485,7 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
       && this.shouldShowAnyBorder()
       // The clue border has precedence over the finesse border
       && !this.shouldShowClueBorder()
-      && globals.state.playing
+      && (globals.state.playing || globals.practiceModeEnabled)
     );
   }
 
@@ -587,7 +606,7 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
       && !this.empathy
       && !cardRules.isPlayed(this.state)
       && !cardRules.isDiscarded(this.state)
-      && globals.state.playing
+      && (globals.state.playing || globals.practiceModeEnabled)
     ));
 
     // Show or hide the "fix" image
@@ -596,7 +615,7 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
       && !this.empathy
       && !cardRules.isPlayed(this.state)
       && !cardRules.isDiscarded(this.state)
-      && globals.state.playing
+      && (globals.state.playing || globals.practiceModeEnabled)
     ));
 
     // Show or hide the direction arrows
@@ -808,7 +827,7 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
   shouldShowNoteIndicator() {
     // If we are a player in an ongoing game,
     // show the note indicator if we have a non-blank note on it
-    if (globals.state.playing) {
+    if (globals.state.playing || globals.practiceModeEnabled) {
       const ourNote = globals.ourNotes.get(this.state.order) ?? '';
       return ourNote !== '';
     }

@@ -18,7 +18,7 @@ import { extractRankText, extractSuitText } from './noteIdentityPattern';
 const get = (order: number, our: boolean) => {
   // If the calling function specifically wants our note or we are a player in an ongoing game,
   // return our note
-  if (our || globals.state.playing) {
+  if (our || globals.practiceModeEnabled || globals.state.playing) {
     return globals.ourNotes.get(order) ?? '';
   }
 
@@ -55,6 +55,7 @@ export const set = (order: number, note: string) => {
   }
 
   // Send the note to the server
+  // Not triggered in practice mode
   if (!globals.state.finished && note !== oldNote) {
     globals.lobby.conn!.send('note', {
       tableID: globals.lobby.tableID,
@@ -64,7 +65,7 @@ export const set = (order: number, note: string) => {
   }
 
   // The note identity features are only enabled for active players
-  if (!globals.state.playing) {
+  if (!globals.state.playing && !globals.practiceModeEnabled) {
     return;
   }
 
@@ -335,7 +336,7 @@ export const show = (card: HanabiCard) => {
 
 export const openEditTooltip = (card: HanabiCard) => {
   // Don't edit any notes in dedicated replays
-  if (globals.state.finished) {
+  if (globals.state.finished && !globals.practiceModeEnabled) {
     return;
   }
 
