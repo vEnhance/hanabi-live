@@ -330,15 +330,6 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
   }
 
   getSuitToShow(cardIdentity: CardIdentity, unknownSuit: Suit) {
-    // If we have a note identity in practice mode, show it
-    if (
-      globals.practiceModeEnabled
-      && this.note.suitIndex !== null
-      && this.state.location === globals.metadata.ourPlayerIndex
-    ) {
-      return this.variant.suits[this.note.suitIndex];
-    }
-
     // If we are in Empathy mode, only show the suit if there is only one possibility left
     if (this.empathy) {
       if (this.state.suitIndex !== null && this.state.suitDetermined) {
@@ -349,7 +340,11 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
     }
 
     // Show the suit if it is known
-    if (cardIdentity.suitIndex !== null) {
+    if (
+      cardIdentity.suitIndex !== null
+      && !(globals.practiceModeEnabled
+           && this.state.location === globals.metadata.ourPlayerIndex)
+    ) {
       return suitIndexToSuit(cardIdentity.suitIndex, this.variant) ?? unknownSuit;
     }
 
@@ -358,20 +353,16 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
       return this.variant.suits[this.note.suitIndex];
     }
 
+    // If we are in practice mode, only show the suit if there is only one possibility left
+    if (globals.practiceModeEnabled) {
+      if (this.state.suitIndex !== null && this.state.suitDetermined) {
+        return this.variant.suits[this.state.suitIndex];
+      }
+    }
     return unknownSuit;
   }
 
   getRankToShow(cardIdentity: CardIdentity) {
-    // If we have a note identity in practice mode, show it
-    if (
-      globals.practiceModeEnabled
-      && this.note.rank !== null
-      && this.state.rank !== null
-      && this.state.location === globals.metadata.ourPlayerIndex
-    ) {
-      return this.note.rank;
-    }
-
     // If we are in Empathy mode, only show the rank if there is only one possibility left
     if (this.empathy) {
       if (this.state.rankDetermined && this.state.rank !== null) {
@@ -389,13 +380,24 @@ export default class HanabiCard extends Konva.Group implements NodeWithTooltip {
     }
 
     // Show the rank if it is known
-    if (cardIdentity.rank !== null) {
+    if (
+      cardIdentity.rank !== null
+      && !(globals.practiceModeEnabled
+           && this.state.location === globals.metadata.ourPlayerIndex)
+    ) {
       return cardIdentity.rank;
     }
 
     // If we have a note identity on the card, show the rank corresponding to the note
     if (this.note.rank !== null) {
       return this.note.rank;
+    }
+
+    // If we are in practice the rank if there is only one possibility left
+    if (globals.practiceModeEnabled) {
+      if (this.state.rankDetermined && this.state.rank !== null) {
+        return this.state.rank;
+      }
     }
 
     return UNKNOWN_CARD_RANK;

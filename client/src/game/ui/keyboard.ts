@@ -127,8 +127,17 @@ const keydown = (event: JQuery.KeyDownEvent) => {
     notes.setAllCardIndicators();
 
     const ourIndex = globals.metadata.ourPlayerIndex;
-    globals.elements.playerHands[ourIndex].setEmpathy(globals.practiceModeEnabled);
+    globals.elements.playerHands[ourIndex].children.each((layoutChild) => {
+      const card = layoutChild.children[0] as HanabiCard;
 
+      // As a sanity check, make sure that the card exists
+      // (it can be undefined sometimes when rewinding)
+      if (card === undefined) {
+        return;
+      }
+
+      card.setBareImage();
+    });
     return;
   }
 
@@ -300,11 +309,8 @@ const keydown = (event: JQuery.KeyDownEvent) => {
 const keyup = (event: JQuery.KeyUpEvent) => {
   if (event.key === ' ') { // Space bar
     globals.globalEmpathyEnabled = false;
-    const ourIndex = globals.metadata.ourPlayerIndex;
     for (const hand of globals.elements.playerHands) {
-      if (hand !== globals.elements.playerHands[ourIndex] || !globals.practiceModeEnabled) {
-        hand.setEmpathy(false);
-      }
+      hand.setEmpathy(false);
     }
   }
 };
