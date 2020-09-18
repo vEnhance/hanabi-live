@@ -113,6 +113,21 @@ const keydown = (event: JQuery.KeyDownEvent) => {
     return;
   }
 
+  if (event.key === '\\') { // backslash
+    // Don't activate practiceMode if we are typing in the in-game chat
+    if ($('#game-chat-input').is(':focus')) {
+      return;
+    }
+    // Don't activate practiceMode in non-replays
+    if (!globals.state.finished) {
+      return;
+    }
+    globals.practiceModeEnabled = !globals.practiceModeEnabled;
+    const ourIndex = globals.metadata.ourPlayerIndex;
+    globals.elements.playerHands[ourIndex].setEmpathy(globals.practiceModeEnabled);
+    return;
+  }
+
   // Ctrl hotkeys
   if (event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
     // Ctrl + Enter = Give a clue / click on the "Give Clue" button
@@ -281,8 +296,11 @@ const keydown = (event: JQuery.KeyDownEvent) => {
 const keyup = (event: JQuery.KeyUpEvent) => {
   if (event.key === ' ') { // Space bar
     globals.globalEmpathyEnabled = false;
+    const ourIndex = globals.metadata.ourPlayerIndex;
     for (const hand of globals.elements.playerHands) {
-      hand.setEmpathy(false);
+      if (hand !== globals.elements.playerHands[ourIndex] || !globals.practiceModeEnabled) {
+        hand.setEmpathy(false);
+      }
     }
   }
 };

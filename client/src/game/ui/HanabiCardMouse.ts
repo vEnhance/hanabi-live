@@ -257,6 +257,10 @@ const setEmpathyOnHand = (card: HanabiCard, enabled: boolean) => {
     return;
   }
 
+  if (card.state.location === globals.metadata.ourPlayerIndex && globals.practiceModeEnabled) {
+    return;
+  }
+
   hand.setEmpathy(enabled);
 };
 

@@ -77,6 +77,7 @@ export class Globals {
   animateFast: boolean = true;
   UIClickTime: number = 0; // Used to prevent accidental double clicks
   globalEmpathyEnabled: boolean = false;
+  practiceModeEnabled: boolean = false;
 
   // State information
   store: Redux.Store<State, Action> | null = null;
