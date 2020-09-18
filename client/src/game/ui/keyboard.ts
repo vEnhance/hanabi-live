@@ -11,6 +11,7 @@ import * as clues from './clues';
 import globals from './globals';
 import HanabiCard from './HanabiCard';
 import * as hypothetical from './hypothetical';
+import * as notes from './notes';
 import * as replay from './replay';
 import * as turn from './turn';
 
@@ -123,8 +124,11 @@ const keydown = (event: JQuery.KeyDownEvent) => {
       return;
     }
     globals.practiceModeEnabled = !globals.practiceModeEnabled;
+    notes.setAllCardIndicators();
+
     const ourIndex = globals.metadata.ourPlayerIndex;
     globals.elements.playerHands[ourIndex].setEmpathy(globals.practiceModeEnabled);
+
     return;
   }
 
