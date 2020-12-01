@@ -49,16 +49,16 @@ export function onEfficiencyChanged(data: {
   let { cardsGottenByNotes } = data;
   let cardsGottenModified = false;
   if (shouldModifyEff) {
-    // The user has specified a manual efficiency modification
-    // (e.g. to account for a card that is Finessed)
     cardsGotten += globals.efficiencyModifier;
     if (globals.efficiencyModifier !== 0) {
+      // The user has specified a manual efficiency modification
+      // (e.g. to account for a card that is Finessed)
       cardsGottenModified = true;
     }
     if (cardsGottenByNotes !== null) {
       cardsGotten += cardsGottenByNotes;
     }
-  } else {
+} else {
     cardsGottenByNotes = null;
   }
 
@@ -118,9 +118,11 @@ export function onEfficiencyChanged(data: {
     ${formatLine("Current cards gotten", data.cardsGotten, false)}
     ${formatLine(
       "Current cards noted as gotten",
-      cardsGottenByNotes === null ? "-" : cardsGottenByNotes,
+      (cardsGottenByNotes !== null && shouldModifyEff) ? cardsGottenByNotes : "-",
     )}
-    ${formatLine("Current cards gotten modifier", globals.efficiencyModifier)}
+    ${formatLine(
+      "Current cards gotten modifier",
+      shouldModifyEff ? globals.efficiencyModifier : "-")}
     ${formatLine("Potential clues lost", data.potentialCluesLost)}
     ${formatLine(
       "Current efficiency",
