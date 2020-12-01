@@ -5,4 +5,6 @@ export default interface NotesState {
   // These are indexed by order
   readonly ourNotes: readonly CardNote[];
   readonly allNotes: readonly SpectatorNote[][];
+  
+  efficiencyModifier: number;
 }

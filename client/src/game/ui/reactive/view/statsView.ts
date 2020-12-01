@@ -8,6 +8,7 @@ import * as tooltips from "../../tooltips";
 export function onEfficiencyChanged(data: {
   cardsGotten: number;
   cardsGottenByNotes: number | null;
+  efficiencyModifier: number;
   potentialCluesLost: number;
   maxScore: number;
   cluesStillUsable: number | null;
@@ -45,12 +46,12 @@ export function onEfficiencyChanged(data: {
     shouldModifyEff = globals.state.visibleState === globals.state.ongoingGame;
   }
 
-  let { cardsGotten } = data;
-  let { cardsGottenByNotes } = data;
+  let { cardsGotten, cardsGottenByNotes } = data;
+  const { efficiencyModifier } = data;
   let cardsGottenModified = false;
   if (shouldModifyEff) {
-    cardsGotten += globals.efficiencyModifier;
-    if (globals.efficiencyModifier !== 0) {
+    cardsGotten += efficiencyModifier;
+    if (efficiencyModifier !== 0) {
       // The user has specified a manual efficiency modification
       // (e.g. to account for a card that is Finessed)
       cardsGottenModified = true;
@@ -122,7 +123,7 @@ export function onEfficiencyChanged(data: {
     )}
     ${formatLine(
       "Current cards gotten modifier",
-      shouldModifyEff ? globals.efficiencyModifier : "-")}
+      shouldModifyEff ? efficiencyModifier : "-")}
     ${formatLine("Potential clues lost", data.potentialCluesLost)}
     ${formatLine(
       "Current efficiency",
