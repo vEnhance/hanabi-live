@@ -46,16 +46,20 @@ export function onEfficiencyChanged(data: {
   }
 
   let { cardsGotten } = data;
-  const { cardsGottenByNotes } = data;
-  if (cardsGottenByNotes !== null) {
-    cardsGotten += cardsGottenByNotes;
-  }
+  let { cardsGottenByNotes } = data;
   let cardsGottenModified = false;
-  if (shouldModifyEff && globals.efficiencyModifier !== 0) {
+  if (shouldModifyEff) {
     // The user has specified a manual efficiency modification
     // (e.g. to account for a card that is Finessed)
     cardsGotten += globals.efficiencyModifier;
-    cardsGottenModified = true;
+    if (globals.efficiencyModifier !== 0) {
+      cardsGottenModified = true;
+    }
+    if (cardsGottenByNotes !== null) {
+      cardsGotten += cardsGottenByNotes;
+    }
+  } else {
+    cardsGottenByNotes = null;
   }
 
   const cardsNotGotten = data.maxScore - cardsGotten;
